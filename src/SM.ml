@@ -1,4 +1,5 @@
-open GT       
+open GT    
+open List   
        
 (* The type for the stack machine instructions *)
 @type insn =
@@ -19,11 +20,20 @@ type config = int list * Syntax.Stmt.config
 
 (* Stack machine interpreter
 
-     val eval : config -> prg -> config
+	 val eval : config -> prg -> config
 
    Takes a configuration and a program, and returns a configuration as a result
  *)                         
-let eval _ = failwith "Not yet implemented"
+let rec eval (stack, (state, inp, out)) prg = match prg with
+    | []               -> (stack, (state, inp, out))
+    | instruction::prg' -> match instruction with
+        | BINOP op -> eval (let y::x::stack' = stack in ((Syntax.Expr.evalBinop op x y)::stack', (state, inp, out))) prg'
+        | CONST v  -> eval (v::stack, (state, inp, out)) prg'
+        | READ     -> eval (let z::inp' = inp in (z::stack, (state, inp', out))) prg'
+        | WRITE    -> eval (let z::stack' = stack in (stack', (state, inp, out @ [z]))) prg'
+        | LD symb  -> eval ((state symb)::stack, (state, inp, out)) prg'
+        | ST symb  -> eval (let z::stack' = stack in (stack', (Syntax.Expr.update symb z state, inp, out))) prg'
+        | _        -> failwith "SM Interpreter: Runtime error."
 
 (* Top-level evaluation
 
@@ -33,6 +43,19 @@ let eval _ = failwith "Not yet implemented"
 *)
 let run i p = let (_, (_, _, o)) = eval ([], (Syntax.Expr.empty, i, [])) p in o
 
+
+(* Stack machine compiler
+
+     val compile : Syntax.Expr.t -> prg
+
+   Takes a program in the source language and returns an equivalent program for the
+   stack machine
+ *)
+let rec compileExpr e = match e with
+    | Syntax.Expr.Const c          -> [CONST c] 
+    | Syntax.Expr.Var v            -> [LD v]
+    | Syntax.Expr.Binop (op, l, r) -> compileExpr l @ compileExpr r @ [BINOP op]
+
 (* Stack machine compiler
 
      val compile : Syntax.Stmt.t -> prg
@@ -40,5 +63,8 @@ let run i p = let (_, (_, _, o)) = eval ([], (Syntax.Expr.empty, i, [])) p in o
    Takes a program in the source language and returns an equivalent program for the
    stack machine
  *)
-
-let compile _ = failwith "Not yet implemented"
+let rec compile stmt = match stmt with
+    | Syntax.Stmt.Read symb          -> [READ; ST symb]
+    | Syntax.Stmt.Write e            -> compileExpr e @ [WRITE]
+    | Syntax.Stmt.Assign (symb, e)   -> compileExpr e @ [ST symb]
+    | Syntax.Stmt.Seq (stmt1, stmt2) -> compile stmt1 @ compile stmt2
