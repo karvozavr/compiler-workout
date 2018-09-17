@@ -2,6 +2,7 @@
    The library provides "@type ..." syntax extension and plugins like show, etc.
 *)
 open GT
+open List
 
 (* Opening a library for combinator-based syntax analysis *)
 open Ostap.Combinators
@@ -37,14 +38,42 @@ module Expr =
     *)
     let update x v s = fun y -> if x = y then v else s y
 
-    (* Expression evaluator
+    let boolToInt b = if b then 1 else 0
 
-          val eval : state -> t -> int
- 
+    (* Casts int to boolean by following rule:
+       0         -> false
+       otherwise -> true
+    *)
+    let intToBool i = if i != 0 then true else false
+
+    (* Evaluate binary operation on arguments.
+       val evalBinop : string -> int -> int
+    *)
+    let evalBinop op l r = match op with
+        | "+"  -> l + r
+        | "-"  -> l - r
+        | "*"  -> l * r 
+        | "/"  -> l / r
+        | "%"  -> l mod r
+        | "<"  -> boolToInt (l < r)
+        | "<=" -> boolToInt (l <= r)
+        | ">"  -> boolToInt (l > r)
+        | ">=" -> boolToInt (l >= r)
+        | "==" -> boolToInt (l == r)
+        | "!=" -> boolToInt (l != r)
+        | "&&" -> boolToInt (intToBool l && intToBool r)
+        | "!!" -> boolToInt (intToBool l || intToBool r)
+
+    (* Expression evaluator
+         val eval : state -> expr -> int
+     
        Takes a state and an expression, and returns the value of the expression in 
        the given state.
     *)
-    let eval _ = failwith "Not implemented yet"
+    let rec eval s e = match e with 
+        | Const c          -> c 
+        | Var v            -> s v
+        | Binop (op, l, r) -> evalBinop op (eval s l) (eval s r) 
 
     (* Expression parser. You can use the following terminals:
 
@@ -78,7 +107,11 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    let eval _ = failwith "Not implemented yet"
+    let rec eval (state, inp, out) stmt = match stmt with
+        | Read symb          -> (Expr.update symb (hd inp) state, tl inp, out)
+        | Write e            -> (state, inp, out @ [Expr.eval state e]) 
+        | Assign (symb, e)   -> (Expr.update symb (Expr.eval state e) state, inp, out)
+        | Seq (stmt1, stmt2) -> eval (eval (state, inp, out) stmt1) stmt2
 
     (* Statement parser *)
     ostap (
