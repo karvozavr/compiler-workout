@@ -6,6 +6,7 @@ open List
 
 (* Opening a library for combinator-based syntax analysis *)
 open Ostap.Combinators
+open Ostap
        
 (* Simple expressions: syntax and semantics *)
 module Expr =
@@ -81,8 +82,43 @@ module Expr =
          DECIMAL --- a decimal constant [0-9]+ as a string
    
     *)
+
+    let binop op = fun x y -> Binop (op, x, y) 
+
     ostap (
-      parse: empty {failwith "Not implemented yet"}
+      expr:
+        !(Util.expr                                         
+          (fun x -> x)                                    
+          [|
+            `Nona, [ostap ("!!"), binop "!!"];
+            `Nona, [ostap ("&&"), binop "&&"];
+            `Nona, [
+              ostap ("=="), binop "=="; 
+              ostap ("!="), binop "!="
+            ]; 
+            `Nona, [
+              ostap ("<="), binop "<=";
+              ostap (">="), binop ">=";
+              ostap ("<"), binop "<"; 
+              ostap (">"), binop ">"
+            ];                                           
+            `Lefta, [
+              ostap ("+"), binop "+"; 
+              ostap ("-"), binop "-"
+            ]; 
+            `Lefta, [
+              ostap ("*"), binop "*"; 
+              ostap ("/"), binop "/"; 
+              ostap ("%"), binop "%"
+            ];
+          |]       
+          primary                                                                  
+        );
+      
+      primary: 
+          x:IDENT {Var x} 
+        | n:DECIMAL {Const n} 
+        | -"(" expr -")"
     )
 
   end
@@ -115,7 +151,12 @@ module Stmt =
 
     (* Statement parser *)
     ostap (
-      parse: empty {failwith "Not implemented yet"}
+      stmt: 
+          x:IDENT -":=" e:!(Expr.expr) {Assign (x, e)}
+        | -"read" -"(" x:IDENT -")" {Read (x)}
+        | -"write" -"(" e:!(Expr.expr) -")" {Write (e)};
+      parse: 
+        <x::xs> :!(Util.listBy)[ostap (";")][stmt] {List.fold_left (fun x y -> Seq (x, y)) x xs}
     )
       
   end
