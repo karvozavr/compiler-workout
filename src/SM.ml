@@ -24,7 +24,16 @@ type config = int list * Stmt.config
 
    Takes a configuration and a program, and returns a configuration as a result
 *)                         
-let rec eval conf prog = failwith "Not yet implemented"
+let rec eval (stack, (state, inp, out)) prg = match prg with
+    | []               -> (stack, (state, inp, out))
+    | instruction::prg' -> match instruction with
+        | BINOP op -> eval (let y::x::stack' = stack in ((Expr.evalBinop op x y)::stack', (state, inp, out))) prg'
+        | CONST v  -> eval (v::stack, (state, inp, out)) prg'
+        | READ     -> eval (let z::inp' = inp in (z::stack, (state, inp', out))) prg'
+        | WRITE    -> eval (let z::stack' = stack in (stack', (state, inp, out @ [z]))) prg'
+        | LD symb  -> eval ((state symb)::stack, (state, inp, out)) prg'
+        | ST symb  -> eval (let z::stack' = stack in (stack', (Expr.update symb z state, inp, out))) prg'
+        | _        -> failwith "SM Interpreter: Runtime error."
 
 (* Top-level evaluation
 
