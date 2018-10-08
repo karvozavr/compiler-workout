@@ -135,7 +135,7 @@ module Stmt =
     (* empty statement                  *) | Skip
     (* conditional                      *) | If     of Expr.t * t * t
     (* loop with a pre-condition        *) | While  of Expr.t * t
-    (* loop with a post-condition       *) (* add yourself *)  with show
+    (* loop with a post-condition       *) | Repeat  of Expr.t * t with show
                                                                     
     (* The type of configuration: a state, an input stream, an output stream *)
     type config = Expr.state * int list * int list 
@@ -146,20 +146,61 @@ module Stmt =
 
        Takes a configuration and a statement, and returns another configuration
     *)
-    let rec eval (state, inp, out) stmt = match stmt with
+    let rec eval (state, inp, out) stmt = 
+      let conf = (state, inp, out) in match stmt with
         | Read symb          -> (Expr.update symb (hd inp) state, tl inp, out)
         | Write e            -> (state, inp, out @ [Expr.eval state e]) 
         | Assign (symb, e)   -> (Expr.update symb (Expr.eval state e) state, inp, out)
         | Seq (stmt1, stmt2) -> eval (eval (state, inp, out) stmt1) stmt2
+        | Skip               -> conf
+        | If (cond, tr, fls) -> if (Expr.eval state cond) <> 0 
+                                  then eval conf tr 
+                                  else eval conf fls
+        | While (cond, body) -> if (Expr.eval state cond) <> 0 
+                                  then eval (eval conf body) (While (cond, body)) 
+                                else conf
 
     (* Statement parser *)
     ostap (
-      stmt: 
-          x:IDENT -":=" e:!(Expr.expr) {Assign (x, e)}
-        | -"read" -"(" x:IDENT -")" {Read (x)}
-        | -"write" -"(" e:!(Expr.expr) -")" {Write (e)};
+      assign: 
+        x:IDENT -":=" e:!(Expr.expr) 
+        {Assign (x, e)};
+      read: 
+        -"read" -"(" x:IDENT -")" 
+        {Read (x)};
+      write:
+        -"write" -"(" e:!(Expr.expr) -")" 
+        {Write (e)};
+      whileLoop:
+        -"while" cond:!(Expr.expr) -"do" body:!(parse) -"od" 
+        {While (cond, body)};
+      ifStmt:
+          -"if" cond:!(Expr.expr) -"then" tr:!(parse) fls:!(elseStmt) -"fi" 
+          {If (cond, tr, fls)}
+        | -"if" cond:!(Expr.expr) -"then" tr:!(parse) -"fi" 
+          {If (cond, tr, Skip)};
+      elseStmt:
+          -"else" fls:!(parse) 
+          {fls}
+        | -"elif" cond:!(Expr.expr) -"then" tr:!(parse) fls:!(elseStmt) -"fi" 
+          {If (cond, tr, fls)};
+      skip:
+        -"skip"
+        {Skip};
+      forLoop:
+        -"for" ini:!(parse) -"," cond:!(Expr.expr) "," post:!(parse) -"do" body:!(parse) -"od" 
+        {Seq (ini, While (cond, Seq (body, post)))};
+      repeatLoop:
+        -"repeat" body:!(parse) -"until" cond:!(Expr.expr) 
+        {Repeat (cond, body)};
+
+      stmt: read | write | assign | skip | ifStmt | whileLoop | forLoop | repeatLoop;
       parse: 
-        <x::xs> :!(Util.listBy)[ostap (";")][stmt] {List.fold_left (fun x y -> Seq (x, y)) x xs}
+        <x::xs> 
+          :!(Util.listBy)
+          [ostap (";")]
+          [stmt]
+          {List.fold_left (fun x y -> Seq (x, y)) x xs}
     )
       
   end

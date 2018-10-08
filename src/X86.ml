@@ -102,22 +102,27 @@ let rec compile env scode =
         | instr :: scode -> 
             let env, code' = 
                 match instr with
-                | CONST n -> let s, env = env#allocate in
-                                (env, [Mov (L n, s)])
-                | LD x -> let s, env = (env#global x)#allocate in
-                                env, (match s with 
-                                        | M _ | S _ -> [Mov (M (env#loc x), eax); Mov (eax, s)]
-                                        | _ -> [Mov (M (env#loc x), s)]
-                                     )
-                | ST x -> let s, env = (env#global x)#pop in
-                            env, [Mov (s, M (env#loc x))]
-                | READ -> let s, env = env#allocate in
-                            env, [Call "Lread"; Mov (eax, s)]
-                | WRITE -> let s, env = env#pop in
-                            env, [Push s; Call "Lwrite"; Pop eax]
+                | CONST n -> 
+                  let s, env = env#allocate 
+                  in (env, [Mov (L n, s)])
+                | LD x -> 
+                  let s, env = (env#global x)#allocate
+                  in env, (match s with 
+                            | M _ | S _ -> [Mov (M (env#loc x), eax); Mov (eax, s)]
+                            | _ -> [Mov (M (env#loc x), s)]
+                          )
+                | ST x -> 
+                  let s, env = (env#global x)#pop 
+                  in env, [Mov (s, M (env#loc x))]
+                | READ -> 
+                  let s, env = env#allocate
+                  in env, [Call "Lread"; Mov (eax, s)]
+                | WRITE -> 
+                  let s, env = env#pop 
+                  in env, [Push s; Call "Lwrite"; Pop eax]
                 | BINOP op -> 
-                    let x, y, env = env#pop2 in 
-                        env#push y,
+                    let x, y, env = env#pop2 
+                      in env#push y,
                         (match op with 
                             |"*" | "+" | "-" -> if onstack y && onstack x
                                     then [Mov (y, eax); Binop (op, x, eax); Mov (eax, y)]
