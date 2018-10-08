@@ -159,6 +159,11 @@ module Stmt =
         | While (cond, body) -> if (Expr.eval state cond) <> 0 
                                   then eval (eval conf body) (While (cond, body)) 
                                 else conf
+        | Repeat (cond, body) -> 
+          let (state', inp', out') = eval conf body in
+          if (Expr.eval state' cond) == 0
+            then eval (state', inp', out') (Repeat (cond, body))
+            else (state', inp', out') 
 
     (* Statement parser *)
     ostap (
@@ -180,9 +185,9 @@ module Stmt =
         | -"if" cond:!(Expr.expr) -"then" tr:!(parse) -"fi" 
           {If (cond, tr, Skip)};
       elseStmt:
-          -"else" fls:!(parse) 
+          -"else" fls:!(parse)
           {fls}
-        | -"elif" cond:!(Expr.expr) -"then" tr:!(parse) fls:!(elseStmt) -"fi" 
+        | -"elif" cond:!(Expr.expr) -"then" tr:!(parse) fls:!(elseStmt)
           {If (cond, tr, fls)};
       skip:
         -"skip"

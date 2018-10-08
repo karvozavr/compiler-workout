@@ -30,7 +30,7 @@ type config = int list * Stmt.config
 *)                         
 let rec eval env conf prg = 
   let (stack, (state, inp, out)) = conf in match prg with
-    | []               -> (stack, (state, inp, out))
+    | []               -> conf
     | instruction::prg' -> match instruction with
         | BINOP op    -> eval env (let y::x::stack' = stack in ((Expr.evalBinop op x y)::stack', (state, inp, out))) prg'
         | CONST v     -> eval env (v::stack, (state, inp, out)) prg'
@@ -38,14 +38,14 @@ let rec eval env conf prg =
         | WRITE       -> eval env (let z::stack' = stack in (stack', (state, inp, out @ [z]))) prg'
         | LD symb     -> eval env ((state symb)::stack, (state, inp, out)) prg'
         | ST symb     -> eval env (let z::stack' = stack in (stack', (Expr.update symb z state, inp, out))) prg'
-        | LABEL label -> conf
+        | LABEL label -> eval env conf prg'
         | JMP label   -> eval env conf (env#labeled label)
         | CJMP (op, label) -> 
           let cond::stack' = stack in 
           let check = match op with 
             | "z"  -> (==) 0
-            | "nz" -> (!=) 0
-          in eval env conf (if (check cond) then (env#labeled label) else prg) 
+            | "nz" -> (<>) 0
+          in eval env conf (if (check cond) then (env#labeled label) else prg') 
         | _           -> failwith "SM Interpreter: Runtime error."
 
 
@@ -89,7 +89,7 @@ let rec compile stmt =
     | Expr.Binop (op, x, y) -> expr x @ expr y @ [BINOP op]
     in
     function
-    | Stmt.Seq (s1, s2)       -> compile s1 @ compile s2
+    | Stmt.Seq (s1, s2)       -> compile' labelGenerator s1 @ compile' labelGenerator s2
     | Stmt.Read x             -> [READ; ST x]
     | Stmt.Write e            -> expr e @ [WRITE]
     | Stmt.Assign (x, e)      -> expr e @ [ST x]
