@@ -35,7 +35,7 @@ let rec eval env conf prg =
   let (call_stack, stack, (state, inp, out)) = conf in match prg with
     | []               -> conf
     | instruction::prg' -> match instruction with
-        | BINOP op    -> eval env (let y::x::stack' = stack in (call_stack, (Expr.evalBinop op x y)::stack', (state, inp, out))) prg'
+        | BINOP op    -> eval env (let y::x::stack' = stack in (call_stack, (Expr.eval_binop op x y)::stack', (state, inp, out))) prg'
         | CONST v     -> eval env (call_stack, v::stack, (state, inp, out)) prg'
         | READ        -> eval env (let z::inp' = inp in (call_stack, z::stack, (state, inp', out))) prg'
         | WRITE       -> eval env (let z::stack' = stack in (call_stack, stack', (state, inp, out @ [z]))) prg'
@@ -54,7 +54,7 @@ let rec eval env conf prg =
           let inner_state = State.push_scope state (params @ locals) in 
           let (state', stack') = List.fold_right 
             (fun symb (st, z::stack') -> (State.update symb z st, stack')) params (inner_state, stack)
-          in (call_stack, stack, (state', inp, out))
+          in eval env (call_stack, stack, (state', inp, out)) prg'
         | END         -> 
           let (prog, state')::call_stack' = call_stack in 
           eval env (call_stack', stack, (State.drop_scope state state', inp, out)) prog

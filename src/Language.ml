@@ -85,7 +85,7 @@ module Expr =
       | "!!" -> fun x y -> bti (itb x || itb y)
       | _    -> failwith (Printf.sprintf "Unknown binary operator %s" op)    
     
-    let evalBinop op x y = (to_func op) x y
+    let eval_binop op x y = (to_func op) x y
 
     let rec eval st expr =      
       match expr with
